@@ -62,12 +62,12 @@ const cron_asura = async (c: Env) => {
     // **1. Obtener todos los registros existentes en una sola consulta**
     const placeholders = manhwaTitle.map(() => '?').join(', ');
     const existingRecords = await c.DB.prepare(`
-      SELECT id, website_title FROM manhwas 
+      SELECT id, website_title, chapters FROM manhwas 
       WHERE website_title IN (${placeholders}) AND website = 'https://asuracomic.net'
-    `).bind(...manhwaTitle).all<{ id: number; website_title: string }>();
+    `).bind(...manhwaTitle).all<{ id: number; website_title: string; chapters: string }>();
 
     // **2. Crear un Map para búsqueda rápida**
-    const existingMap = new Map(existingRecords.results.map((record: { website_title: any; id: any; }) => [record.website_title, record.id]));
+    const existingMap = new Map(existingRecords.results.map(record => [record.website_title, { id: record.id, chapters: record.chapters }]));
 
     // **3. Preparar datos para actualización e inserción**
     const updateQueries = [];
@@ -78,10 +78,13 @@ const cron_asura = async (c: Env) => {
       const chapter = manhwachapter[i] ?? "";
 
       if (existingMap.has(title)) {
-        // **Actualizar capítulos si el manhwa ya existe**
-        updateQueries.push(c.DB.prepare(`
-          UPDATE manhwas SET chapters = ? WHERE id = ?
-        `).bind(chapter, existingMap.get(title)));
+        const existingRecord = existingMap.get(title);
+        if (existingRecord && existingRecord.chapters !== chapter) {
+          // **Actualizar solo si el capítulo ha cambiado**
+          updateQueries.push(c.DB.prepare(`
+            UPDATE manhwas SET chapters = ? WHERE id = ?
+          `).bind(chapter, existingRecord.id));
+        }
       } else {
         // **Insertar nuevo manhwa**
         insertQueries.push(c.DB.prepare(`

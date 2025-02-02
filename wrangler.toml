@@ -2,12 +2,14 @@ name = "cloudflare-worker-boilerplate"
 main = "src/index.ts"
 compatibility_date = "2023-03-10"
 
-# Put your generated id from wrangler here
-kv_namespaces = [{ binding = "KV_KEYVALUE", preview_id = "$PREVIEW_ID", id = "$PRODUCTION_ID" }]
-
-[vars]
-# Put your secret variable name here as to not forget about them
-# - API_KEY
+[[d1_databases]]
+binding = "DB"
+database_name = "USER_DATABASE"
+database_id = "11e0ea22-7c4e-4b82-af94-60432028e446"
 
 [triggers]
-crons = ["0 7 * * *"]
+crons = ["*/15 * * * *"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1 # optional. default = 1.

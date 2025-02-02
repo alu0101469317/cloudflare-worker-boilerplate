@@ -98,7 +98,8 @@ export async function handleSchedule(
   /*
    * Handling specific event to trigger for a CRON trigger
    */
-  if (cron === "0 7 * * *") {
+  console.log("cron:", cron);
+  if (cron === "5 * * * *") {
     console.log("cron triggered!");
     return updateKeyValue(env);
   }

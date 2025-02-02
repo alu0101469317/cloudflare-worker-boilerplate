@@ -18,10 +18,10 @@ const cron_asura = async (c: Env) => {
 
     let start_reading = false;
     let read_next = false;
-    let read_chapter: boolean = false;
+    let read_chapter = false;
     let manhwachapter: string[] = [];
     let manhwaTitle: string[] = [];
-    let manhwaData: { title: string; chapter: string; }[] = []; // Array to store extracted manhwa names and chapters
+    let manhwaData: { title: string; chapter: string }[] = [];
 
     const rewriter = new HTMLRewriter()
       .on('span', {
@@ -30,7 +30,7 @@ const cron_asura = async (c: Env) => {
           
           if (trimmedText) {
             if (trimmedText.toLowerCase().includes('search')) {
-              start_reading = true; // Start reading when 'search' is found
+              start_reading = true;
             }
             if (start_reading) {
               if (read_next) {
@@ -41,7 +41,6 @@ const cron_asura = async (c: Env) => {
                 manhwachapter.push(trimmedText);
                 read_chapter = false;
               }
-              // Check if the text contains manhwa title information
               if (trimmedText.toLowerCase().includes('manhwa') || trimmedText.toLowerCase().includes('manga') || trimmedText.toLowerCase().includes('manhua')) {
                 read_next = true;
               }
@@ -53,40 +52,60 @@ const cron_asura = async (c: Env) => {
         },
       });
 
-    await rewriter.transform(response).arrayBuffer(); // Process HTML
+    await rewriter.transform(response).arrayBuffer();
 
-    // Insert data into D1 (Cloudflare's SQL database)
+    if (manhwaTitle.length === 0) {
+      console.log("No data found.");
+      return;
+    }
+
+    // **1. Obtener todos los registros existentes en una sola consulta**
+    const placeholders = manhwaTitle.map(() => '?').join(', ');
+    const existingRecords = await c.DB.prepare(`
+      SELECT id, website_title FROM manhwas 
+      WHERE website_title IN (${placeholders}) AND website = 'https://asuracomic.net'
+    `).bind(...manhwaTitle).all<{ id: number; website_title: string }>();
+
+    // **2. Crear un Map para búsqueda rápida**
+    const existingMap = new Map(existingRecords.results.map((record: { website_title: any; id: any; }) => [record.website_title, record.id]));
+
+    // **3. Preparar datos para actualización e inserción**
+    const updateQueries = [];
+    const insertQueries = [];
+
     for (let i = 0; i < manhwaTitle.length; i++) {
       const title = manhwaTitle[i];
-      const chapter = manhwachapter[i];
+      const chapter = manhwachapter[i] ?? "";
 
-      // Check if the manhwa already exists in the database
-      const existingRecord = await c.DB.prepare(`
-        SELECT id FROM manhwas WHERE website_title = ? AND website = 'https://asuracomic.net'
-      `).bind(title).first();
-
-      if (existingRecord) {
-        // If it exists, update the chapters
-        await c.DB.prepare(`
+      if (existingMap.has(title)) {
+        // **Actualizar capítulos si el manhwa ya existe**
+        updateQueries.push(c.DB.prepare(`
           UPDATE manhwas SET chapters = ? WHERE id = ?
-        `).bind(chapter, existingRecord.id).run();
+        `).bind(chapter, existingMap.get(title)));
       } else {
-      // Insert the data into D1 database
-      await c.DB.prepare(`
-        INSERT INTO manhwas (title, website_title, website, alt_title, type, volumes, chapters, status, 
-          published_start, published_end, genres, themes, serialization, authors, members, favorites, 
-          synopsis, background) 
-        VALUES ('', ?, 'https://asuracomic.net', '', '', 0, ?, '', '', '', '', '', '', 0, 0, '', '','')
-      `)
-      .bind(title, chapter)
-      .run();
+        // **Insertar nuevo manhwa**
+        insertQueries.push(c.DB.prepare(`
+          INSERT INTO manhwas (title, website_title, website, alt_title, type, volumes, chapters, status, 
+            published_start, published_end, genres, themes, serialization, authors, members, favorites, 
+            synopsis, background) 
+          VALUES ('', ?, 'https://asuracomic.net', '', '', 0, ?, '', '', '', '', '', '', 0, 0, '', '', '')
+        `).bind(title, chapter));
       }
+      
       manhwaData.push({ title, chapter });
     }
+
+    // **4. Ejecutar actualizaciones e inserciones en lotes**
+    if (updateQueries.length > 0) {
+      await Promise.all(updateQueries.map(query => query.run()));
+    }
+    if (insertQueries.length > 0) {
+      await Promise.all(insertQueries.map(query => query.run()));
+    }
+
     console.log("Scraping completed");
     console.log(manhwaData);
     return;
-
   } catch (error) {
     console.error("Scraping error:", error);
     return;

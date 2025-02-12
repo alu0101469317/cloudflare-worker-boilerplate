@@ -19,5 +19,14 @@ CREATE TABLE manhwas (
   members INTEGER,
   favorites INTEGER,
   synopsis TEXT,
-  background TEXT
+  background TEXT,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Trigger to update 'updated_at' on any row update
+CREATE TRIGGER update_manhwa_timestamp
+AFTER UPDATE ON manhwas
+FOR EACH ROW
+BEGIN
+  UPDATE manhwas SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+END;

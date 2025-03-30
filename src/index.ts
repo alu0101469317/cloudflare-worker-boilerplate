@@ -3,9 +3,12 @@ import { handleRequest, handleOptions, handleSchedule } from "./handler";
 
 export interface Env {
   /**
-   * IF you defined more env on .dev.vars or .env, don't forget to update this interface
+   * Environment variables for Supabase
    */
-  // API_KEY: string;
+  SUPABASE_URL: string;
+  SUPABASE_SERVICE_KEY: string;
+  
+  // Keep D1 for backward compatibility or remove if no longer needed
   DB: D1Database;
 }
 

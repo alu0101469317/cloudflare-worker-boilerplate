@@ -13,5 +13,8 @@
     "deploy": "wrangler deploy",
     "test": "vitest",
     "schedule": "wrangler dev --test-scheduled"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1"
   }
 }

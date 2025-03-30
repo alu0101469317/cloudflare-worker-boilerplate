@@ -1,15 +1,21 @@
 import { Env } from "..";
+import { createClient } from '@supabase/supabase-js';
 
 export async function updateKeyValue(env: Env) {
   await cron_asura(env);
   return new Response(null, {
     status: 200,
-    statusText: "Successfully changed DB Store",
+    statusText: "Successfully updated Supabase",
   });
 }
 
 const cron_asura = async (c: Env) => {
   try {
+    // Initialize Supabase client
+    const supabaseUrl = c.SUPABASE_URL;
+    const supabaseKey = c.SUPABASE_SERVICE_KEY;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
     const response = await fetch('https://asuracomic.net/series');
     if (!response.ok) {
       console.error("Failed to fetch AsuraScans");
@@ -59,19 +65,26 @@ const cron_asura = async (c: Env) => {
       return;
     }
 
-    // **1. Obtener todos los registros existentes en una sola consulta**
-    const placeholders = manhwaTitle.map(() => '?').join(', ');
-    const existingRecords = await c.DB.prepare(`
-      SELECT id, website_title, chapters FROM manhwas 
-      WHERE website_title IN (${placeholders}) AND website = 'https://asuracomic.net'
-    `).bind(...manhwaTitle).all<{ id: number; website_title: string; chapters: string }>();
+    // Get all existing records from Supabase
+    const { data: existingRecords, error: fetchError } = await supabase
+      .from('manhwas')
+      .select('id, website_title, chapters')
+      .in('website_title', manhwaTitle)
+      .eq('website', 'https://asuracomic.net');
 
-    // **2. Crear un Map para búsqueda rápida**
-    const existingMap = new Map(existingRecords.results.map(record => [record.website_title, { id: record.id, chapters: record.chapters }]));
+    if (fetchError) {
+      console.error("Error fetching records:", fetchError);
+      return;
+    }
 
-    // **3. Preparar datos para actualización e inserción**
-    const updateQueries = [];
-    const insertQueries = [];
+    // Create a map for faster lookups
+    const existingMap = new Map(
+      existingRecords?.map(record => [record.website_title, { id: record.id, chapters: record.chapters }]) || []
+    );
+
+    // Prepare batches for operations
+    const updates = [];
+    const inserts = [];
 
     for (let i = 0; i < manhwaTitle.length; i++) {
       const title = manhwaTitle[i];
@@ -80,30 +93,54 @@ const cron_asura = async (c: Env) => {
       if (existingMap.has(title)) {
         const existingRecord = existingMap.get(title);
         if (existingRecord && existingRecord.chapters !== chapter) {
-          // **Actualizar solo si el capítulo ha cambiado**
-          updateQueries.push(c.DB.prepare(`
-            UPDATE manhwas SET chapters = ? WHERE id = ?
-          `).bind(chapter, existingRecord.id));
+          // Only update if chapter has changed
+          updates.push({ 
+            id: existingRecord.id,
+            chapters: chapter 
+          });
         }
       } else {
-        // **Insertar nuevo manhwa**
-        insertQueries.push(c.DB.prepare(`
-          INSERT INTO manhwas (title, website_title, website, alt_title, type, volumes, chapters, status, 
-            published_start, published_end, genres, themes, serialization, authors, members, favorites, 
-            synopsis, background) 
-          VALUES ('', ?, 'https://asuracomic.net', '', '', 0, ?, '', '', '', '', '', '', 0, 0, '', '', '')
-        `).bind(title, chapter));
+        // Insert new manhwa
+        inserts.push({
+          title: '',
+          website_title: title,
+          website: 'https://asuracomic.net',
+          alt_title: '',
+          type: '',
+          volumes: 0,
+          chapters: chapter,
+          status: '',
+          published_start: null,
+          published_end: null,
+          genres: '',
+          themes: '',
+          serialization: '',
+          authors: '',
+          members: 0,
+          favorites: 0,
+          synopsis: '',
+          background: ''
+        });
       }
       
       manhwaData.push({ title, chapter });
     }
 
-    // **4. Ejecutar actualizaciones e inserciones en lotes**
-    if (updateQueries.length > 0) {
-      await Promise.all(updateQueries.map(query => query.run()));
+    // Execute updates
+    if (updates.length > 0) {
+      // Supabase doesn't support batch updates directly, so we need to do them one by one
+      // But we can use Promise.all to parallelize them
+      await Promise.all(updates.map(update => 
+        supabase.from('manhwas').update({ chapters: update.chapters }).eq('id', update.id)
+      ));
     }
-    if (insertQueries.length > 0) {
-      await Promise.all(insertQueries.map(query => query.run()));
+
+    // Execute inserts (can be done in a single batch)
+    if (inserts.length > 0) {
+      const { error: insertError } = await supabase.from('manhwas').insert(inserts);
+      if (insertError) {
+        console.error("Error inserting records:", insertError);
+      }
     }
 
     console.log("Scraping completed");

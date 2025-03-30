@@ -1,12 +1,21 @@
 import { Env } from ".";
 import { configuration, list_api } from "./configuration";
-import { getDummy } from "./routes/dummy.route";
 import { updateKeyValue } from "./routes/keyvalue.route";
+import { scrapeAsuraScans } from "./routes/asura.route"; 
+// Import other routes as needed
 
 export async function handleRequest(
   request: Request,
   env: Env
 ): Promise<Response> {
+  const url = new URL(request.url);
+  const path = url.pathname;
+
+  // Asegúrate que esta ruta exista
+  if (path === "/api/scrape-asura") {
+    return scrapeAsuraScans(env);
+  }
+
   const requestURL = new URL(request.url);
   const requestPath = requestURL.pathname;
 
@@ -36,8 +45,6 @@ export async function handleRequest(
         status: 200,
         statusText: "Server up and running",
       });
-    case list_api.dummy:
-      return getDummy(env);
     case list_api.keyvalue:
       return updateKeyValue(env);
     case list_api.pages:
@@ -45,6 +52,8 @@ export async function handleRequest(
         status: 404,
         statusText: "Not yet implemented",
       });
+    case "/api/scrape-asura":
+      return scrapeAsuraScans(env);
     default:
       // * You can return a HTML body for a 404 page
       return new Response(null, {
@@ -92,22 +101,26 @@ export async function handleOptions(request: Request): Promise<Response> {
 export async function handleSchedule(
   event: ScheduledEvent,
   env: Env
-): Promise<Response> {
-  const cron = parseCron(event.cron);
-
-  /*
-   * Handling specific event to trigger for a CRON trigger
-   */
-  console.log("cron:", cron);
-  if (cron === "5 * * * *") {
-    console.log("cron triggered!");
-    return updateKeyValue(env);
+): Promise<void> {
+  // Run the scraper on schedule
+  try {
+    await scrapeAsuraScans(env);
+    console.log("Scheduled scraping completed successfully");
+  } catch (error) {
+    console.error("Scheduled scraping failed:", error);
   }
-  console.log("no event triggered");
-  return new Response(null, {
-    status: 500,
-    statusText: "Internal server error, cron not detected",
-  });
+}
+
+// Helper function for scheduled execution
+async function scrapeAndUpdateDatabase(env: Env) {
+  // Initialize Supabase client
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+  
+  scrapeAsuraScans(env);
+  // Rest of the scraping logic (same as in asura.route.ts)
+  // ... implementation similar to scrapeAndUpdateDatabase in asura.route.ts
+
 }
 
 /**

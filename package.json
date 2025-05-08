@@ -15,6 +15,7 @@
     "schedule": "wrangler dev --test-scheduled"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.1"
+    "@supabase/supabase-js": "^2.49.1",
+    "cheerio": "^1.0.0"
   }
 }

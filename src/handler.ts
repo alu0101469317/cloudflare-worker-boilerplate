@@ -1,8 +1,38 @@
 import { Env } from ".";
-import { configuration, list_api } from "./configuration";
-import { updateKeyValue } from "./routes/keyvalue.route";
 import { scrapeAsuraScans } from "./routes/asura.route"; 
-// Import other routes as needed
+import { scrapeReaperScans } from "./routes/reaperscans.route"; 
+
+const configuration = {
+  //   host: '*',
+  // * For CORS
+  host: "https://example.com",
+  referer: "https://example.com",
+  methods: ["GET", "HEAD", "POST", "OPTIONS", "PATCH"],
+};
+
+/*
+ * Schedule handler
+ * For handling requests made by Cloudflare's CRON trigger
+ */
+export async function handleSchedule(
+  event: ScheduledEvent,
+  env: Env
+): Promise<void> {
+  // Run both scrapers in parallel
+  const asuraScrapePromise = scrapeAsuraScans(env)
+    .then(() => console.log("Scheduled AsuraScans scraping completed successfully"))
+    .catch((error) => console.error("Scheduled AsuraScans scraping failed:", error));
+    
+  const reaperScrapePromise = scrapeReaperScans(env)
+    .then(() => console.log("Scheduled ReaperScans scraping completed successfully"))
+    .catch((error) => console.error("Scheduled ReaperScans scraping failed:", error));
+    
+  // Wait for both to complete, regardless of success/failure
+  await Promise.allSettled([asuraScrapePromise, reaperScrapePromise]);
+  
+  console.log("All scheduled scraping tasks completed");
+}
+
 
 export async function handleRequest(
   request: Request,
@@ -10,11 +40,6 @@ export async function handleRequest(
 ): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
-
-  // Asegúrate que esta ruta exista
-  if (path === "/api/scrape-asura") {
-    return scrapeAsuraScans(env);
-  }
 
   const requestURL = new URL(request.url);
   const requestPath = requestURL.pathname;
@@ -30,30 +55,22 @@ export async function handleRequest(
     });
   }
 
-  //* Check for mobile url
-  // const user_agent = request.headers.get("user-agent");
-  // const is_mobile = isMobileUpstream(user_agent);
-
-  /*
-   * Handle Worker's URL Path
-   * If you want to manage various URL path for your worker
-   */
   switch (requestPath) {
-    // TODO: Manage request path here, add additional condition for mobile if necessary.
-    case list_api.home:
+    
+    case "/":
       return new Response(JSON.stringify({ msg: "Server up and running" }), {
         status: 200,
         statusText: "Server up and running",
       });
-    case list_api.keyvalue:
-      return updateKeyValue(env);
-    case list_api.pages:
-      return new Response(null, {
-        status: 404,
-        statusText: "Not yet implemented",
-      });
     case "/api/scrape-asura":
       return scrapeAsuraScans(env);
+    case "/api/scrape-reaper":
+      return scrapeReaperScans(env);
+
+
+
+
+
     default:
       // * You can return a HTML body for a 404 page
       return new Response(null, {
@@ -92,71 +109,4 @@ export async function handleOptions(request: Request): Promise<Response> {
       },
     });
   }
-}
-
-/*
- * Schedule handler
- * For handling requests made by Cloudflare's CRON trigger
- */
-export async function handleSchedule(
-  event: ScheduledEvent,
-  env: Env
-): Promise<void> {
-  // Run the scraper on schedule
-  try {
-    await scrapeAsuraScans(env);
-    console.log("Scheduled scraping completed successfully");
-  } catch (error) {
-    console.error("Scheduled scraping failed:", error);
-  }
-}
-
-// Helper function for scheduled execution
-async function scrapeAndUpdateDatabase(env: Env) {
-  // Initialize Supabase client
-  const { createClient } = await import('@supabase/supabase-js');
-  const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
-  
-  scrapeAsuraScans(env);
-  // Rest of the scraping logic (same as in asura.route.ts)
-  // ... implementation similar to scrapeAndUpdateDatabase in asura.route.ts
-
-}
-
-/**
- * Normalize CRON string
- * @param cron
- * @returns {string}
- */
-function parseCron(cron: string): string {
-  cron = cron.replaceAll("/", "");
-  if (cron.length > 9) {
-    cron = cron.substring(cron.length - 9);
-  }
-  cron = cron.replaceAll("+", " ");
-  return cron;
-}
-
-/**
- * Check whether the request is from a mobile agent
- * @param user_agent Obtained from cloudflare agent
- * @returns true / false, identify if the request are from mobile or not
- */
-function isMobileUpstream(user_agent: string | null): boolean {
-  const agents = [
-    "Android",
-    "iPhone",
-    "SymbianOS",
-    "Windows Phone",
-    "iPad",
-    "iPod",
-  ];
-  if (user_agent !== null && user_agent !== undefined) {
-    for (const element of agents) {
-      if (user_agent.indexOf(element) > 0) {
-        return true;
-      }
-    }
-  }
-  return false;
 }

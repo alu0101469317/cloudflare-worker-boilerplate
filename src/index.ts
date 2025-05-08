@@ -23,9 +23,9 @@ export default {
       });
 
     if (request.method === "OPTIONS") {
-      return handleOptions(request);
+      return handleOptions(request); // handle cuando haces una petición desde fuera
     } else {
-      return handleRequest(request, env);
+      return handleRequest(request, env); // handle cuando haces una petición desde dentro(ejemplo desde el schedule o local)
     }
   },
   async scheduled(

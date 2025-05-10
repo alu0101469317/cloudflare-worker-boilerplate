@@ -23,12 +23,8 @@ export async function handleSchedule(
     .then(() => console.log("Scheduled AsuraScans scraping completed successfully"))
     .catch((error) => console.error("Scheduled AsuraScans scraping failed:", error));
     
-  const reaperScrapePromise = scrapeReaperScans(env)
-    .then(() => console.log("Scheduled ReaperScans scraping completed successfully"))
-    .catch((error) => console.error("Scheduled ReaperScans scraping failed:", error));
-    
   // Wait for both to complete, regardless of success/failure
-  await Promise.allSettled([asuraScrapePromise, reaperScrapePromise]);
+  await Promise.allSettled([asuraScrapePromise]);
   
   console.log("All scheduled scraping tasks completed");
 }

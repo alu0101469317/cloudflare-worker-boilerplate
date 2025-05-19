@@ -1,6 +1,9 @@
 import { Env } from ".";
 import { scrapeAsuraScans } from "./routes/asura.route"; 
-import { scrapeReaperScans } from "./routes/reaperscans.route"; 
+import { scrapeRizzFablesScans } from "./routes/rizzfables.route";
+import { scrapeQuantumScans } from "./routes/quantum.route";
+import { scrapeHiveComic } from "./routes/hivecomic.route";
+import { scrapeFlameComics } from "./routes/flamecomics.route";
 
 const configuration = {
   //   host: '*',
@@ -22,9 +25,24 @@ export async function handleSchedule(
   const asuraScrapePromise = scrapeAsuraScans(env)
     .then(() => console.log("Scheduled AsuraScans scraping completed successfully"))
     .catch((error) => console.error("Scheduled AsuraScans scraping failed:", error));
+  const rizzScrapePromise = scrapeRizzFablesScans(env)
+    .then(() => console.log("Scheduled RizzFables scraping completed successfully"))
+    .catch((error) => console.error("Scheduled RizzFables scraping failed:", error));
+  const quantumScrapePromise = scrapeQuantumScans(env)
+    .then(() => console.log("Scheduled QuantumScans scraping completed successfully"))
+    .catch((error) => console.error("Scheduled QuantumScans scraping failed:", error));
+  const hiveScrapePromise = scrapeHiveComic(env)
+    .then(() => console.log("Scheduled HiveComic scraping completed successfully"))
+    .catch((error) => console.error("Scheduled HiveComic scraping failed:", error));
+  const flameScrapePromise = scrapeFlameComics(env)
+    .then(() => console.log("Scheduled FlameComics scraping completed successfully"))
+    .catch((error) => console.error("Scheduled FlameComics scraping failed:", error));
+  
     
   // Wait for both to complete, regardless of success/failure
-  await Promise.allSettled([asuraScrapePromise]);
+  await Promise.allSettled([asuraScrapePromise, rizzScrapePromise, quantumScrapePromise, 
+    hiveScrapePromise, flameScrapePromise]);
+  
   
   console.log("All scheduled scraping tasks completed");
 }
@@ -60,8 +78,14 @@ export async function handleRequest(
       });
     case "/api/scrape-asura":
       return scrapeAsuraScans(env);
-    case "/api/scrape-reaper":
-      return scrapeReaperScans(env);
+    case "/api/scrape-rizz":
+      return scrapeRizzFablesScans(env);
+    case "/api/scrape-quantum":
+      return scrapeQuantumScans(env);
+    case "/api/scrape-hive":
+      return scrapeHiveComic(env);
+    case "/api/scrape-flame":
+      return scrapeFlameComics(env);
 
 
 

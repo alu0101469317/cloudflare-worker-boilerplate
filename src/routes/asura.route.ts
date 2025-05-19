@@ -3,9 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function scrapeAsuraScans(env: Env): Promise<Response> {
   try {
-    console.log("======= INICIANDO SCRAPE DE ASURASCAN =======");
     const result = await scrapeAndUpdateDatabase(env);
-    console.log("======= SCRAPE COMPLETADO =======");
     
     return new Response(JSON.stringify(result), {
       status: 200,
@@ -79,7 +77,6 @@ function formatManhwaUrl(baseUrl: string, chapter: string): string {
 
 async function scrapeAndUpdateDatabase(env: Env) {
   try {
-    console.log("🔍 Iniciando scraping de AsuraScans...");
     
     // Initialize Supabase client
     const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
@@ -321,14 +318,11 @@ async function scrapeAndUpdateDatabase(env: Env) {
       }
     }
 
-    console.log(`📊 Resumen: ${updates.length} actualizaciones, ${inserts.length} inserciones, ${noChanges.length} sin cambios`);
-
 
     // Procesar actualizaciones
     let updateCount = 0;
     
     if (updates.length > 0) {
-      console.log("\n🔄 Procesando actualizaciones...");
       
       for (const update of updates) {
         try {
@@ -344,7 +338,7 @@ async function scrapeAndUpdateDatabase(env: Env) {
           if (!error) {
             updateCount++;
             // Mostrar detalles de cada actualización
-            console.log(`  🔄 Actualizado: "${update.title}" - ${update.oldChapter} → ${update.newChapter}`);
+            console.log(`  ✅ Actualizado ASURA "${update.title}" de ${update.oldChapter} a ${update.newChapter}`);
           } else {
             console.error(`  ⚠️ Error actualizando "${update.title}":`, error.message);
           }
@@ -353,7 +347,6 @@ async function scrapeAndUpdateDatabase(env: Env) {
         }
       }
       
-      console.log(`✅ Actualizaciones completadas: ${updateCount}/${updates.length}`);
     }
 
     // Procesar inserciones de forma segura (lote por lote)
@@ -361,13 +354,10 @@ async function scrapeAndUpdateDatabase(env: Env) {
     const BATCH_SIZE = 10; // Reducimos para mayor seguridad
     
     if (inserts.length > 0) {
-      console.log("\n➕ Procesando inserciones...");
       
       for (let i = 0; i < inserts.length; i += BATCH_SIZE) {
         try {
           const batch = inserts.slice(i, i + BATCH_SIZE);
-          console.log(`  Insertando lote ${i/BATCH_SIZE + 1}/${Math.ceil(inserts.length/BATCH_SIZE)} (${batch.length} items)`);
-                    
           const { data, error } = await supabase
             .from('manhwas')
             .insert(batch)
@@ -377,7 +367,6 @@ async function scrapeAndUpdateDatabase(env: Env) {
             console.error(`  ⚠️ Error insertando lote:`, error.message);
             
             // Intenta insertar uno a uno si falla el lote
-            console.log("  Intentando inserción individual...");
             for (const item of batch) {
               try {
                 const { error: singleError } = await supabase
@@ -387,7 +376,7 @@ async function scrapeAndUpdateDatabase(env: Env) {
                 
                 if (!singleError) {
                   insertCount++;
-                  console.log(`  ➕ Insertado: "${item.website_title}" - ${item.chapters}`);
+                  console.log(`  ✅ Insertado ASURA con ID ${item}`);
                 } else {
                   console.error(`  ⚠️ Error insertando "${item.website_title}":`, singleError.message);
                 }
@@ -401,7 +390,7 @@ async function scrapeAndUpdateDatabase(env: Env) {
             
             // Mostrar cada item insertado en el lote
             data?.forEach(item => {
-              console.log(`  ➕ Insertado: "${item.website_title}" - ${item.chapters}`);
+              console.log(`  ✅ Insertado ASURA con ID ${item.id}`);
             });
           }
         } catch (batchError) {
@@ -409,10 +398,8 @@ async function scrapeAndUpdateDatabase(env: Env) {
         }
       }
       
-      console.log(`✅ Inserciones completadas: ${insertCount}/${inserts.length}`);
     }
 
-    console.log("\n✅ PROCESO COMPLETADO");
     return {
       message: "Scraping completed successfully",
       total: manhwaItems.length,
